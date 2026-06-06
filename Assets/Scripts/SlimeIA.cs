@@ -21,6 +21,13 @@ public class SlimeIA : MonoBehaviour
     private Coroutine stateCouritine;
     private bool isPlayerVisible = false;
     private float loseTimer = 0f;
+    public float slimeRotationSpeed = 5f;
+
+    [Header("Enemy Attack")]
+    public bool isAttack = false;//Está atancando
+    public float attackDelay = 1.5f;//Tempo entre os ataques
+    private Coroutine attackCoroutine;//Instancia o ataque
+
 
     private void Start()
     {
@@ -149,11 +156,10 @@ public class SlimeIA : MonoBehaviour
 
     private IEnumerator FURY()
     {
+        loseTimer = 0f;
         agent.speed = 3.0f; //Aumenta a velocidade do Slime
         agent.isStopped = false;
         agent.stoppingDistance = _gameManager.slimeDistanceAttack;
-
-
 
         if(m_Animator != null)
         {
@@ -187,6 +193,7 @@ public class SlimeIA : MonoBehaviour
 
                 if (distanceToPlayer > agent.stoppingDistance)
                 {
+                    agent.isStopped = false;
                     agent.SetDestination(_gameManager.player.position);
                     m_Animator.SetBool("isWalk", true);
                     m_Animator.SetBool("isAlert", true);
@@ -196,7 +203,8 @@ public class SlimeIA : MonoBehaviour
                     m_Animator.SetBool("isWalk", false);
                     agent.isStopped = true;
                     agent.ResetPath();
-                    //m_Animator.SetTrigger("AttackTrigger");
+                    
+                    Attack();//realiza o ataque quando estiver próximo o suficiente
                 }
             }
 
@@ -212,20 +220,39 @@ public class SlimeIA : MonoBehaviour
         m_Animator.SetBool("isWalk", false);
         m_Animator.SetBool("isAlert", true);
 
-        yield return new WaitForSeconds(_gameManager.slimeAlertTime);
+        float timer = 0f;
+
+        while (timer < _gameManager.slimeAlertTime)
+        {
+            if (_gameManager.player != null)
+            {
+                Vector3 direction =
+                    _gameManager.player.position - transform.position;
+
+                direction.y = 0; // não inclina para cima/baixo
+
+                if (direction != Vector3.zero)
+                {
+                    Quaternion targetRotation =
+                        Quaternion.LookRotation(direction);
+
+                    transform.rotation = Quaternion.Slerp(
+                        transform.rotation,
+                        targetRotation,
+                        5f * Time.deltaTime);
+                }
+            }
+
+            timer += Time.deltaTime;
+            yield return null;
+        }
 
         m_Animator.SetBool("isAlert", false);
 
         if (isPlayerVisible)
-        {
             ChangeState(enemyState.FURY);
-        }
         else
-        {
             ChangeState(enemyState.PATROL);
-        }
-
-
     }
 
     private void OnTriggerEnter(Collider other)
@@ -248,4 +275,30 @@ public class SlimeIA : MonoBehaviour
             isPlayerVisible = false;
         }
     }
+
+    public void EnemyAttack()//Disparado pelo evento de animação "Script de Animação do Attack2"
+    {
+        if(attackCoroutine != null)
+        {
+            StopCoroutine(attackCoroutine);
+        }
+
+        attackCoroutine = StartCoroutine(AttackCooldown());
+    }
+
+    public void Attack()
+    {
+        if(isAttack || isDead) return;
+
+        isAttack = true;
+        m_Animator.SetTrigger("AttackTrigger");
+        //Dano do player 
+    }
+
+    private IEnumerator AttackCooldown()
+    {
+        yield return new WaitForSeconds(attackDelay);
+        isAttack = false;
+    }
+
 }
