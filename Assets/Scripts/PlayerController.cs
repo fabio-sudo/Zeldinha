@@ -21,6 +21,12 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private ParticleSystem fxAtack;
     [SerializeField] private bool isAtacking = false;
 
+    [Range(0.2f, 1f)]
+    public float hitRange = 0.5f;
+    public Transform hitBox;
+    public Collider[] hitEnemies;
+    public LayerMask hitMask;
+    public int attackDamage = 10;
 
     //Não aparecem no inspector
     private CharacterController characterController;
@@ -134,11 +140,29 @@ public class PlayerController : MonoBehaviour
         anim.SetTrigger("Attack");
          fxAtack.Emit(1); 
          isAtacking = true;
+
+        hitEnemies = Physics.OverlapSphere
+            (hitBox.position, hitRange, hitMask);
+
+        foreach (Collider enemy in hitEnemies)
+        {
+           enemy.gameObject.SendMessage(
+               "GetHit", attackDamage, SendMessageOptions.DontRequireReceiver);
+        }
     }
 
     public void AtackIsDone()
     {
         isAtacking = false;
+    }
+
+    private void OnDrawGizmosSelected()
+    {
+        if(hitBox == null) return;
+
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere
+            (hitBox.position, hitRange);
     }
 
 
