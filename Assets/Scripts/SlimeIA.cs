@@ -1,4 +1,5 @@
 using System.Collections;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -18,11 +19,12 @@ public class SlimeIA : MonoBehaviour
     private NavMeshAgent agent;
     private int idWayPoint;
     private Coroutine stateCouritine;
+    private bool isPlayerVisible = false;
+    private float loseTimer = 0f;
 
     private void Start()
     {
         m_Animator = GetComponent<Animator>();
-        hp = 3;
         isDead = false;
 
         agent = GetComponent<NavMeshAgent>();
@@ -45,11 +47,14 @@ public class SlimeIA : MonoBehaviour
             if (hp <= 0)
             {
                 isDead = true;
+                agent.isStopped = true;
+                m_Animator.SetBool("isWalk", false);
                 StartCoroutine(Died());
             }
             else
             {
                 m_Animator.SetTrigger("GetHitTrigger");
+                ChangeState(enemyState.FURY);//Leva dano e fica furioso
             }
         }
     }
@@ -71,6 +76,14 @@ public class SlimeIA : MonoBehaviour
 
             case enemyState.PATROL:
                 stateCouritine = StartCoroutine(PATROL());
+                break;
+
+            case enemyState.ALERT:
+                stateCouritine = StartCoroutine(ALERT());
+                break;
+
+            case enemyState.FURY:
+                stateCouritine = StartCoroutine(FURY());
                 break;
 
             default:
@@ -98,6 +111,7 @@ public class SlimeIA : MonoBehaviour
 
     private IEnumerator PATROL()//Patrulhando
     {
+        agent.speed = 2.0f; //Diminuir a velocidade do Slime
         agent.isStopped = false;
 
         if (m_Animator != null)
@@ -133,5 +147,105 @@ public class SlimeIA : MonoBehaviour
 
     }//Método Que vai escolher onde o enemy vai
 
+    private IEnumerator FURY()
+    {
+        agent.speed = 3.0f; //Aumenta a velocidade do Slime
+        agent.isStopped = false;
+        agent.stoppingDistance = _gameManager.slimeDistanceAttack;
 
+
+
+        if(m_Animator != null)
+        {
+            m_Animator.SetBool("isAlert", true);
+            m_Animator.SetBool("isWalk", true);
+        }
+
+        while(!isDead)
+        {
+            if(_gameManager.player != null)
+            {
+
+                if (!isPlayerVisible)
+                {
+                    loseTimer += 0.1f;
+
+                    if(loseTimer >= _gameManager.slimeLosePlayerTime)
+                    {
+                        ChangeState(enemyState.PATROL);
+                        yield break;
+                    }
+                }
+                else
+                {
+                    loseTimer = 0f;
+                }
+
+
+                    float distanceToPlayer =
+                        Vector3.Distance(transform.position, _gameManager.player.position);
+
+                if (distanceToPlayer > agent.stoppingDistance)
+                {
+                    agent.SetDestination(_gameManager.player.position);
+                    m_Animator.SetBool("isWalk", true);
+                    m_Animator.SetBool("isAlert", true);
+                }
+                else
+                {
+                    m_Animator.SetBool("isWalk", false);
+                    agent.isStopped = true;
+                    agent.ResetPath();
+                    //m_Animator.SetTrigger("AttackTrigger");
+                }
+            }
+
+            yield return new WaitForSeconds(0.1f);
+        }
+    }
+
+    private IEnumerator ALERT()
+    {
+        agent.isStopped = true;
+        agent.ResetPath();
+
+        m_Animator.SetBool("isWalk", false);
+        m_Animator.SetBool("isAlert", true);
+
+        yield return new WaitForSeconds(_gameManager.slimeAlertTime);
+
+        m_Animator.SetBool("isAlert", false);
+
+        if (isPlayerVisible)
+        {
+            ChangeState(enemyState.FURY);
+        }
+        else
+        {
+            ChangeState(enemyState.PATROL);
+        }
+
+
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        if (other.CompareTag("Player"))
+        {
+            isPlayerVisible = true;
+
+            if(state == enemyState.IDLE || state == enemyState.PATROL)
+            {
+                ChangeState(enemyState.ALERT);
+            }
+        }
+    }
+
+    private void OnTriggerExit(Collider other)
+    {
+        if (other.CompareTag("Player"))
+        {
+            isPlayerVisible = false;
+        }
+    }
 }
