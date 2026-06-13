@@ -5,6 +5,11 @@ using UnityEngine.InputSystem;
 public class PlayerController : MonoBehaviour
 {
 
+    [Header("Life Player")]
+    [SerializeField] private int maxHp = 100;
+    [SerializeField] private int currentHp;
+    public bool isDead = false;
+
     [Header("Movimento")]
     [SerializeField] private float walkSpeed = 3f;
     [SerializeField] private float runSpeed = 6f;
@@ -37,6 +42,9 @@ public class PlayerController : MonoBehaviour
 
     private void Start()
     {
+
+        currentHp = maxHp;
+
         isRunning = false;
 
         characterController = GetComponent<CharacterController>();
@@ -46,6 +54,8 @@ public class PlayerController : MonoBehaviour
 
     private void Update()
     {
+        if (isDead) return;
+
         MovimentacaoPlayer();
     }
 
@@ -56,6 +66,8 @@ public class PlayerController : MonoBehaviour
 
     public void OnAttack(InputValue value)
     {
+        if (isDead) return;
+
         if (value.isPressed)
         {
             AtaquePlayer();
@@ -165,5 +177,47 @@ public class PlayerController : MonoBehaviour
             (hitBox.position, hitRange);
     }
 
+
+
+    // Método público para receber dano
+    public void TakeDamage(int amount)
+    {
+        if (isDead) return;
+
+        currentHp -= amount;
+        Debug.Log($"Player HP: {currentHp}/{maxHp}");
+
+        if (currentHp <= 0)
+        {
+            Die();
+        }
+        else
+        {
+            // Opcional: Se tiver uma animação de dano no Animator do Player
+            anim.SetTrigger("HitTrigger");
+        }
+    }
+    private void Die()
+    {
+        isDead = true;
+
+        anim.SetTrigger("DieTrigger");
+        characterController.enabled = false;
+
+        if (TryGetComponent<PlayerInput>(out PlayerInput playerInput))
+        {
+            playerInput.enabled = false;
+        }
+
+        // ===== ENVIA PARA QUALQUER INIMIGO COM A TAG "Enemy" =====
+        GameObject[] enemies = GameObject.FindGameObjectsWithTag("Enemy");
+        foreach (GameObject enemy in enemies)
+        {
+            enemy.SendMessage("Victory", SendMessageOptions.DontRequireReceiver);
+        }
+        // =========================================================
+
+        this.enabled = false;
+    }
 
 }

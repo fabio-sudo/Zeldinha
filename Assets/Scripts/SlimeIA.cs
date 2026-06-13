@@ -9,6 +9,10 @@ public class SlimeIA : MonoBehaviour
     public int hp;
     private bool isDead = false;
 
+    [Header("Enemy Attack Config")]
+    public int attackDamage = 10;  // Dano que o slime causa
+
+
     [Header("Enemy State")]
     public enemyState state;
     public const float idelWaitTime = 3f;//Tempo de espera no Idle
@@ -24,9 +28,10 @@ public class SlimeIA : MonoBehaviour
     public float slimeRotationSpeed = 5f;
 
     [Header("Enemy Attack")]
-    public bool isAttack = false;//Est� atancando
+    public bool isAttack = false;//Está atacando
     public float attackDelay = 1.5f;//Tempo entre os ataques
-    private Coroutine attackCoroutine;//Instancia o ataque
+    private float nextAttackTime = 0f;
+    public float hurtDelay = 1.0f; // Tempo de recuperação após levar dano
 
 
     private void Start()
@@ -60,6 +65,9 @@ public class SlimeIA : MonoBehaviour
             }
             else
             {
+                isAttack = false; // Reseta o estado de ataque para não travar
+                nextAttackTime = Time.time + hurtDelay; // Adiciona cooldown de recuperação para não contra-atacar imediatamente
+
                 m_Animator.SetTrigger("GetHitTrigger");
                 ChangeState(enemyState.FURY);//Leva dano e fica furioso
             }
@@ -74,6 +82,7 @@ public class SlimeIA : MonoBehaviour
             StopCoroutine(stateCouritine);
 
         state = newState;
+        isAttack = false; // Garante que não ficará travado se mudar de estado
 
         switch (state)
         {
@@ -127,7 +136,7 @@ public class SlimeIA : MonoBehaviour
         }
 
 
-        EscolherNovoDestino();//Movimentar para um destino aleat�rio
+        EscolherNovoDestino();//Movimentar para um destino aleatório
 
 
         while (agent.pathPending || agent.remainingDistance > agent.stoppingDistance) 
@@ -152,7 +161,7 @@ public class SlimeIA : MonoBehaviour
         idWayPoint = Random.Range(0, _gameManager.slimeWayPoints.Length);
         agent.SetDestination(_gameManager.slimeWayPoints[idWayPoint].position);
 
-    }//M�todo Que vai escolher onde o enemy vai
+    }//Método Que vai escolher onde o enemy vai
 
     private IEnumerator FURY()
     {
@@ -204,7 +213,7 @@ public class SlimeIA : MonoBehaviour
                     agent.isStopped = true;
                     agent.ResetPath();
                     
-                    Attack();//realiza o ataque quando estiver pr�ximo o suficiente
+                    Attack();//realiza o ataque quando estiver próximo o suficiente
                 }
             }
 
@@ -229,7 +238,7 @@ public class SlimeIA : MonoBehaviour
                 Vector3 direction =
                     _gameManager.player.position - transform.position;
 
-                direction.y = 0; // n�o inclina para cima/baixo
+                direction.y = 0; // não inclina para cima/baixo
 
                 if (direction != Vector3.zero)
                 {
@@ -276,29 +285,65 @@ public class SlimeIA : MonoBehaviour
         }
     }
 
-    public void EnemyAttack()//Disparado pelo evento de anima��o "Script de Anima��o do Attack2"
-    {
-        if(attackCoroutine != null)
-        {
-            StopCoroutine(attackCoroutine);
-        }
-
-        attackCoroutine = StartCoroutine(AttackCooldown());
-    }
-
     public void Attack()
     {
-        if(isAttack || isDead) return;
+        if(isAttack || isDead || Time.time < nextAttackTime) return;
 
         isAttack = true;
+        nextAttackTime = Time.time + attackDelay;
         m_Animator.SetTrigger("AttackTrigger");
-        //Dano do player 
     }
 
-    private IEnumerator AttackCooldown()
+    public void EnemyAttack()//Disparado no animator
     {
-        yield return new WaitForSeconds(attackDelay);
-        isAttack = false;
+        if (_gameManager.player != null)
+        {
+            // Busca o PlayerController anexado ao jogador
+            PlayerController player = _gameManager.player.GetComponent<PlayerController>();
+            if (player != null)
+            {
+                // Verifica se o player ainda está perto o suficiente para ser atingido
+                float distanceToPlayer = Vector3.Distance(transform.position, _gameManager.player.position);
+
+                // Usamos a distância de ataque configurada no GameManager mais uma pequena margem (ex: 0.5f)
+                float hitRange = _gameManager.slimeDistanceAttack + 0.5f;
+                if (distanceToPlayer <= hitRange)
+                {
+                    // Aplica o dano no player
+                    player.TakeDamage(attackDamage);
+                }
+            }
+        }
+        // =================================
+    }
+
+
+    public void Victory()
+    {
+        // 1. Para a corrotina do estado atual (IDLE, PATROL, ALERT ou FURY)
+        if (stateCouritine != null)
+        {
+            StopCoroutine(stateCouritine);
+        }
+        // 2. Para o agente de navegação para o slime parar de andar
+        if (agent != null)
+        {
+            agent.isStopped = true;
+            agent.ResetPath();
+        }
+        // 3. Reseta os parâmetros de animação de movimento
+        m_Animator.SetBool("isWalk", false);
+        m_Animator.SetBool("isAlert", false);
+        // 4. Dispara a animação de vitória
+        m_Animator.SetTrigger("VictoryTrigger");
+    }
+
+    public void EnemyFinishAttack()//Disparado pelo evento de animação "Script de Animação do Attack2"
+    {
+        if (isAttack != false)
+        {
+            isAttack = false;
+        }
     }
 
 }
